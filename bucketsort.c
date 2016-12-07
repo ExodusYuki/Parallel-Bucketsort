@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-//#include <mpi.h>
+#include <mpi.h>
 #include <string.h>
 #include <time.h>
 
