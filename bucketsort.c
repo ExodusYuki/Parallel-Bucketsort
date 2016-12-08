@@ -39,6 +39,7 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}	
 		int n = strtol(argv[1], NULL, 10);
+		MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
 
 		// Create two arrays with same random values
         array_serial = malloc(n*sizeof(long));
@@ -48,15 +49,15 @@ int main(int argc, char *argv[]){
 		
 		/* Perform timed serial sort */
 		gettimeofday(&tv1,NULL); //Start time
-		serialMergesort(array_serial, n);
+		serialMergeSort(array_serial, n);
 		gettimeofday(&tv2,NULL); //End time
 		double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 			(double) (tv2.tv_sec - tv1.tv_sec); 
 		analyzeSort(array_serial, n, serial_time, "Serial"); 
-
+		
+		print_array(array_serial, n);
 
 	}
-	//TODO: Print Data (#7 on project writeup)
 
 	MPI_Finalize();
     if(my_rank == 0) {
@@ -100,7 +101,7 @@ void serialMergeSort(long *array, int len){
  * Regular merge func to be used with seriel mergesort
  */
 void merge(long *array, int n, int m){
-    long temp
+    long temp[n];
 	int i, j, k;
 	for(i = 0, j = m, k = 0; k < n; k++){
 		if(j ==n){
@@ -149,12 +150,16 @@ void print_array(const long *array, const int len) {
 }
 
 void analyzeSort(long *array, int num_elements, double time, char *type){
-	if(!validSort(array, num_elements)){
+	if(!valid_sort(array, num_elements)){
 		printf("INVALID SORT\n");
 	} else{
 		printf("======================\n");
 		printf("VALID SORT\n");
 		//TODO: Add time and complexity stats
+		printf("Type: %s\n", type);
+		printf("Time: %lf\n", time);
 	}
+	
+
 }
 
