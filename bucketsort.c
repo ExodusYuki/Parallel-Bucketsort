@@ -20,6 +20,7 @@ void print_array(const long *array, const int len);
 void gen_random_array(long *array, const int len); 
 void analyzeSort(long *array, int num_elements, double time, char *type);
 long get_random_index(const long *array, int len);
+int min(int first, int second);
 
 int main(int argc, char *argv[]){
 	
@@ -68,7 +69,7 @@ int main(int argc, char *argv[]){
         // Figure out S
         int num_samples = 10 * comm_sz * (log(n)/log(2));// S
         // Create sample array and fill it with random samples
-        int sample_indices[num_samples];
+        int sample_indices[min(num_samples,n)];
         int i;
         srand(time(NULL));
         for(i = 0; i < num_samples; i++) {
@@ -83,9 +84,6 @@ int main(int argc, char *argv[]){
             pivots[i] = sample_indices[w];
         }
         // pivots now contains the list of pivots
-
-
-
 
 		MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
         MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -110,6 +108,15 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
+/* Finds the minimumof two integers
+ *
+ */
+int min(int first, int second){
+	if(first < second)
+		return first;
+	else
+		return second;
+}
 /*
  *Takes an array and generates random numbers up to len
  */
