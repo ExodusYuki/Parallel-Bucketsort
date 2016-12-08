@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
+#include <math.h>
 #include <string.h>
 #include <time.h>
 
@@ -18,6 +19,7 @@ void serialMergeSort(long *array, int len);
 void print_array(const long *array, const int len);
 void gen_random_array(long *array, const int len); 
 void analyzeSort(long *array, int num_elements, double time, char *type);
+long get_random_index(const long *array, int len);
 
 int main(int argc, char *argv[]){
 	
@@ -39,7 +41,6 @@ int main(int argc, char *argv[]){
 			exit(1);
 		}	
 		int n = strtol(argv[1], NULL, 10);
-		MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
 
 		// Create two arrays with same random values
         array_serial = malloc(n*sizeof(long));
@@ -54,10 +55,52 @@ int main(int argc, char *argv[]){
 		double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 			(double) (tv2.tv_sec - tv1.tv_sec); 
 		analyzeSort(array_serial, n, serial_time, "Serial"); 
+
+        /* COMPUTE PIVOTS 
+         *
+         * Steps for bucket sort:
+         * - partition elements into p buckets (p == number of processes) 
+         *   * Choose pivots that define p buckets, need p-1 pivots
+         *   * Randomly sample the entire array and choose p-1 pivots
+         * using process in write-up
+         *   * P0 does this and sends pivots to other processes
+         */
+        // Figure out S
+        int num_samples = 10 * comm_sz * (log(n)/log(2));// S
+        // Create sample array and fill it with random samples
+        int sample_indices[num_samples];
+        int i;
+        srand(time(NULL));
+        for(i = 0; i < num_samples; i++) {
+            sample_indices[i] = rand() % n;
+        }
+        // Sort samples
+        serialMergeSort((long *)sample_indices, num_samples);
+        // Find the pivots using pivots[i] = S*(i+1)/P
+        int pivots[comm_sz-1];
+        for(i = 0; i < comm_sz-1; i++) {
+            int w = (num_samples * (i+1)) / comm_sz;
+            pivots[i] = sample_indices[w];
+        }
+        // pivots now contains the list of pivots
+
+
+
+
+		MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
+        MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 		
-		print_array(array_serial, n);
+		//print_array(array_serial, n);
 
 	}
+
+    /*
+     * OTHER PROCESSES
+     * - Each process determines which bucket each element of it's local array
+     * belongs to. Then send that element to process[i]'s bucket.
+     * - Once all processes have all the element assigned to their bucket they
+     * can create a sorted array of elements in their bucket and send their sorted elements back to P0.
+     */
 
 	MPI_Finalize();
     if(my_rank == 0) {
