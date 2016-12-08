@@ -19,31 +19,49 @@ void print_array(const long *array, const int len);
 void gen_random_array(long *array, const int len); 
 
 int main(int argc, char *argv[]){
-	//TODO: Add timing
+	
+	int comm_size; /* Number of processes */
+	int my_rank;   /* My process rank*/
 	struct timeval tv1, tv2; //For timing
 
-	if(argc != 2){
-		printf("Program needs 1 arg: <number of elements>\n");
-		exit(1);
+	// MPI initializations
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+	// Process 0 gets arg and creates arrays with random vals
+	if(my_rank == 0){
+		if(argc != 2){
+			printf("Program needs 1 arg: <number of elements>\n");
+			exit(1);
+		}	
+		int n = strtol(argv[1], NULL, 10);
+
+		// Create two arrays with same random values
+		long *array_serial = malloc(n*sizeof(long));
+		long *array_parallel = malloc(n*sizeof(long));
+		gen_random_array(array_serial, n);
+		gen_random_array(array_parallel, n);
+		
+		/* Perform timed serial sort */
+		gettimeofday(&tv1,NULL); //Start time
+		serielMergeSort(array_parallel, n);
+		gettimeofday(&tv2,NULL); //End time
+		double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+			(double) (tv2.tv_sec - tv1.tv_sec); 
+		analyzeSort(array_serial, n, serial_time, "Serial"); 
+
+
 	}
-	//TODO: Process 0 gets arg and creates arrays with random vals
-	// Number of elements in array
-	int n = strtol(argv[1], NULL, 10);
+	//TODO: Print Data (#7 on project writeup)
 
-	// Create two arrays with same random values
-	long *array_serial = malloc(n*sizeof(long));
-	long *array_parallel = malloc(n*sizeof(long));
-	gen_random_array(array_serial, n);
-	gen_random_array(array_parallel, n);
-
-	// Debug
-	print_array(array_serial, n);
-	print_array(array_parallel, n);
-
+	MPI_Finalize();
+	free(array_serial);
+	free(array_parallel);
 	return 0;
 }
 
-/*Added from PA1
+/*
  *Takes an array and generates random numbers up to len
  */
 void gen_random_array(long *array, const int len) {
@@ -56,7 +74,7 @@ void gen_random_array(long *array, const int len) {
 	}
 }
 
-/* Added from PA1
+/* 
  * Regular seriel mergesort implementation
  */
 void serialMergeSort(long *array, int len){
@@ -72,7 +90,7 @@ void serialMergeSort(long *array, int len){
 	merge(array, len, mid);
 }
 
-/*TODO: Change to work with new arrays
+/*
  * Added from PA1
  * Regular merge func to be used with seriel mergesort
  */
@@ -123,3 +141,29 @@ void print_array(const long *array, const int len) {
 	}
 	printf("\n");
 }
+
+/**
+* Validates the sort was successful.
+* returns true if valid, false if invalid
+* (Uses stdbool types)
+*/
+int validSort(const int *array, const int len) {
+	int i;
+	for (i = 1; i < len; i++) {
+		if(array[i-1] > array[i]) {
+			return false;
+		}
+	}
+	 return true;
+}
+
+void analyzeSort(int *array, int num_elements, double time, char *type){
+	if(!validSort(array, num_elements)){
+		printf("INVALID SORT\n");
+	} else{
+		printf("======================\n");
+		printf("VALID SORT\n");
+		//TODO: Add time and complexity stats
+	}
+}
+
