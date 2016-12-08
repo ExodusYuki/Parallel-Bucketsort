@@ -5,7 +5,7 @@ CFLAGS=-Wall -Wextra -Werror -g
 all: $(TARGETS) 
 
 bucketsort: bucketsort.c
-	gcc $(CFLAGS) -o $@ $^
+	mpicc $(CFLAGS) -o $@ $^
 
 clean:
 	rm -f $(TARGETS) 

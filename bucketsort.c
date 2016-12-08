@@ -17,10 +17,11 @@ void merge(long *array, int n, int m);
 void serialMergeSort(long *array, int len);
 void print_array(const long *array, const int len);
 void gen_random_array(long *array, const int len); 
+void analyzeSort(long *array, int num_elements, double time, char *type);
 
 int main(int argc, char *argv[]){
 	
-	int comm_size; /* Number of processes */
+	int comm_sz; /* Number of processes */
 	int my_rank;   /* My process rank*/
 	struct timeval tv1, tv2; //For timing
 
@@ -28,6 +29,8 @@ int main(int argc, char *argv[]){
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    long *array_serial;
+    long *array_parallel;
 
 	// Process 0 gets arg and creates arrays with random vals
 	if(my_rank == 0){
@@ -38,14 +41,14 @@ int main(int argc, char *argv[]){
 		int n = strtol(argv[1], NULL, 10);
 
 		// Create two arrays with same random values
-		long *array_serial = malloc(n*sizeof(long));
-		long *array_parallel = malloc(n*sizeof(long));
+        array_serial = malloc(n*sizeof(long));
+        array_parallel = malloc(n*sizeof(long));
 		gen_random_array(array_serial, n);
 		gen_random_array(array_parallel, n);
 		
 		/* Perform timed serial sort */
 		gettimeofday(&tv1,NULL); //Start time
-		serielMergeSort(array_parallel, n);
+		serialMergesort(array_serial, n);
 		gettimeofday(&tv2,NULL); //End time
 		double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 			(double) (tv2.tv_sec - tv1.tv_sec); 
@@ -56,8 +59,10 @@ int main(int argc, char *argv[]){
 	//TODO: Print Data (#7 on project writeup)
 
 	MPI_Finalize();
-	free(array_serial);
-	free(array_parallel);
+    if(my_rank == 0) {
+        free(array_serial);
+        free(array_parallel);
+    }
 	return 0;
 }
 
@@ -95,6 +100,7 @@ void serialMergeSort(long *array, int len){
  * Regular merge func to be used with seriel mergesort
  */
 void merge(long *array, int n, int m){
+    long temp
 	int i, j, k;
 	for(i = 0, j = m, k = 0; k < n; k++){
 		if(j ==n){
@@ -142,22 +148,7 @@ void print_array(const long *array, const int len) {
 	printf("\n");
 }
 
-/**
-* Validates the sort was successful.
-* returns true if valid, false if invalid
-* (Uses stdbool types)
-*/
-int validSort(const int *array, const int len) {
-	int i;
-	for (i = 1; i < len; i++) {
-		if(array[i-1] > array[i]) {
-			return false;
-		}
-	}
-	 return true;
-}
-
-void analyzeSort(int *array, int num_elements, double time, char *type){
+void analyzeSort(long *array, int num_elements, double time, char *type){
 	if(!validSort(array, num_elements)){
 		printf("INVALID SORT\n");
 	} else{
