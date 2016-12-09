@@ -35,47 +35,46 @@ int main(int argc, char *argv[]){
     long *array_serial;
     long *array_parallel;
 	long *local_array;
-	int local_n;
+	int n = 0;
+	int local_n = n/comm_sz;
 	int *pivots;
-	int n;
 
 	// Process 0 gets arg and creates arrays with random vals
 	//TODO: Error check
 	if(my_rank == 0){
 		printf("Enter number of elements to sort\n");
 		scanf("%d", &n);
-		printf("GOT N\n");
 	}
-
-	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
+	// Broadcast N
+	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+	// Arrays
 	array_parallel = malloc(n*sizeof(long));
-	local_n = n/comm_sz;
 	local_array = malloc(sizeof(long) * local_n);
 	pivots = malloc(sizeof(int) * (comm_sz-1));
 
-	// Process 0 creates serial array
+	// Process 0 sorts serial array
 	if(my_rank == 0) {
 		array_serial = malloc(n*sizeof(long));
 		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
 	}
 	
-	// Broadcast  pivots and scatter parallel array
+	// Broadcast pivots and scatter parallel array
 	MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Scatter(array_parallel, local_n, MPI_LONG, local_array,
-	local_n, MPI_LONG, my_rank, MPI_COMM_WORLD);
+	local_n, MPI_LONG, my_rank, MPI_COMM_WORLD);//Each process has local array
 
-	return 0;
     /*
      * OTHER PROCESSES
-     * - Each process determines which bucket each element of it's local array
-     * belongs to. Then send that element to process[i]'s bucket.
-     * - Once all processes have all the element assigned to their bucket they
-     * can create a sorted array of elements in their bucket and send their sorted elements back to P0.
+     * TODO:Each process determines which bucket each element of it's local array
+     		belongs to. Then send that element to process[i]'s bucket.
+     * TODO:Once all processes have all the element assigned to their bucket they
+     * 		can create a sorted array of elements in their bucket and send their 
+	 		sorted elements back to P0.
      */
 
     if(my_rank == 0) {
-       // free(array_serial);
-        //free(array_parallel);
+       free(array_serial);
+       free(array_parallel);
     }
 
 	MPI_Finalize();
@@ -85,9 +84,7 @@ int main(int argc, char *argv[]){
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
 
 	struct timeval tv1, tv2; //For timing
-	// Create two arrays with same random values
-	//array_serial = malloc(n*sizeof(long));
-	//array_parallel = malloc(n*sizeof(long));
+	// Fill arrays with random values
 	gen_random_array(array_serial, n);
 	gen_random_array(array_parallel, n);
 	
@@ -97,24 +94,13 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	gettimeofday(&tv2,NULL); //End time
 	double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 		(double) (tv2.tv_sec - tv1.tv_sec); 
-	printf("%lf\n", serial_time);
 	analyzeSort(array_serial, n, serial_time, "Serial"); 
 
-	/* COMPUTE PIVOTS 
-	 *
-	 * Steps for bucket sort:
-	 * - partition elements into p buckets (p == number of processes) 
-	 *   * Choose pivots that define p buckets, need p-1 pivots
-	 *   * Randomly sample the entire array and choose p-1 pivots
-	 * using process in write-up
-	 *   * P0 does this and sends pivots to other processes
-	 */
-	// Figure out S
-	// Create sample array and fill it with random samples
+	/*** COMPUTE PIVOTS ***/
+	// Calc S and create sample array and fill it with random samples
 	long num_samples = 10 * comm_sz * (log(n)/log(2));// S
 	num_samples = min(n,num_samples);
-	printf("S: %ld\n", num_samples);
-	long sample_indices[num_samples];
+	long sample_indices[num_samples]; 
 	int i;
 	srand(time(NULL));
 	for(i = 0; i < num_samples; i++) {
@@ -122,7 +108,6 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	}
 	// Sort samples
 	serialMergeSort(sample_indices, num_samples);
-	printf("Got Here!");
 	
 	// Find the pivots using pivots[i] = S*(i+1)/P
 	for(i = 0; i < comm_sz-1; i++) {
@@ -161,7 +146,6 @@ void serialMergeSort(long *array, int len){
 	if(len < 2){
 		return;
 	}
-	printf("Got here");
 	int mid = len/2;
 	//Mergesort the left half
 	serialMergeSort(array, mid);
