@@ -16,11 +16,10 @@
 int valid_sort(const long *array, const int len); 
 void merge(long *array, int n, int m);
 void serialMergeSort(long *array, int len);
-void print_array(const long *array, const int len);
 void gen_random_array(long *array, const int len); 
 void analyzeSort(long *array, int num_elements, double time, char *type);
 long get_random_index(const long *array, int len);
-int min(int first, int second);
+long min(long first, long second);
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz,
 int *pivots);
 
@@ -41,74 +40,31 @@ int main(int argc, char *argv[]){
 	int n;
 
 	// Process 0 gets arg and creates arrays with random vals
+	//TODO: Error check
 	if(my_rank == 0){
-		if(argc != 2){
-			printf("Program needs 1 arg: <number of elements>\n");
-			exit(1);
-		}	
-		n = strtol(argv[1], NULL, 10);
+		printf("Enter number of elements to sort\n");
+		scanf("%d", &n);
+		printf("GOT N\n");
 	}
 
 	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD); // Broadcast n
-	array_serial = malloc(n*sizeof(long));
 	array_parallel = malloc(n*sizeof(long));
 	local_n = n/comm_sz;
 	local_array = malloc(sizeof(long) * local_n);
 	pivots = malloc(sizeof(int) * (comm_sz-1));
 
+	// Process 0 creates serial array
 	if(my_rank == 0) {
-		/*
-		// Create two arrays with same random values
-        //array_serial = malloc(n*sizeof(long));
-        //array_parallel = malloc(n*sizeof(long));
-		gen_random_array(array_serial, n);
-		gen_random_array(array_parallel, n);
-		
-		// Perform timed serial sort
-		gettimeofday(&tv1,NULL); //Start time
-		serialMergeSort(array_serial, n);
-		gettimeofday(&tv2,NULL); //End time
-		double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
-			(double) (tv2.tv_sec - tv1.tv_sec); 
-		analyzeSort(array_serial, n, serial_time, "Serial"); 
-		*/
-
-        /* COMPUTE PIVOTS 
-         *
-         * Steps for bucket sort:
-         * - partition elements into p buckets (p == number of processes) 
-         *   * Choose pivots that define p buckets, need p-1 pivots
-         *   * Randomly sample the entire array and choose p-1 pivots
-         * using process in write-up
-         *   * P0 does this and sends pivots to other processes
-         */
-        // Figure out S
-		/*
-        int num_samples = 10 * comm_sz * (log(n)/log(2));// S
-        // Create sample array and fill it with random samples
-        int sample_indices[min(num_samples,n)];
-        int i;
-        srand(time(NULL));
-        for(i = 0; i < num_samples; i++) {
-            sample_indices[i] = rand() % n;
-        }
-        // Sort samples
-        serialMergeSort((long *)sample_indices, num_samples);
-        // Find the pivots using pivots[i] = S*(i+1)/P
-        //pivots = malloc(sizeof(int) * (comm_sz-1));
-        for(i = 0; i < comm_sz-1; i++) {
-            int w = (num_samples * (i+1)) / comm_sz;
-            pivots[i] = sample_indices[w];
-        }
-        // pivots now contains the list of pivots
-		*/
+		array_serial = malloc(n*sizeof(long));
 		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
 	}
-
+	
+	// Broadcast  pivots and scatter parallel array
 	MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Scatter(array_parallel, local_n, MPI_LONG, local_array,
 	local_n, MPI_LONG, my_rank, MPI_COMM_WORLD);
 
+	return 0;
     /*
      * OTHER PROCESSES
      * - Each process determines which bucket each element of it's local array
@@ -117,11 +73,12 @@ int main(int argc, char *argv[]){
      * can create a sorted array of elements in their bucket and send their sorted elements back to P0.
      */
 
-	MPI_Finalize();
     if(my_rank == 0) {
-        free(array_serial);
-        free(array_parallel);
+       // free(array_serial);
+        //free(array_parallel);
     }
+
+	MPI_Finalize();
 	return 0;
 }
 
@@ -140,6 +97,7 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	gettimeofday(&tv2,NULL); //End time
 	double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 		(double) (tv2.tv_sec - tv1.tv_sec); 
+	printf("%lf\n", serial_time);
 	analyzeSort(array_serial, n, serial_time, "Serial"); 
 
 	/* COMPUTE PIVOTS 
@@ -152,18 +110,21 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	 *   * P0 does this and sends pivots to other processes
 	 */
 	// Figure out S
-	int num_samples = 10 * comm_sz * (log(n)/log(2));// S
 	// Create sample array and fill it with random samples
-	int sample_indices[min(num_samples,n)];
+	long num_samples = 10 * comm_sz * (log(n)/log(2));// S
+	num_samples = min(n,num_samples);
+	printf("S: %ld\n", num_samples);
+	long sample_indices[num_samples];
 	int i;
 	srand(time(NULL));
 	for(i = 0; i < num_samples; i++) {
 		sample_indices[i] = rand() % n;
 	}
 	// Sort samples
-	serialMergeSort((long *)sample_indices, num_samples);
+	serialMergeSort(sample_indices, num_samples);
+	printf("Got Here!");
+	
 	// Find the pivots using pivots[i] = S*(i+1)/P
-	//pivots = malloc(sizeof(int) * (comm_sz-1));
 	for(i = 0; i < comm_sz-1; i++) {
 		int w = (num_samples * (i+1)) / comm_sz;
 		pivots[i] = sample_indices[w];
@@ -171,10 +132,9 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	// pivots now contains the list of pivots
 }
 
-/* Finds the minimumof two integers
- *
+/* Finds the minimum of two longs
  */
-int min(int first, int second){
+long min(long first, long second){
 	if(first < second)
 		return first;
 	else
@@ -201,6 +161,7 @@ void serialMergeSort(long *array, int len){
 	if(len < 2){
 		return;
 	}
+	printf("Got here");
 	int mid = len/2;
 	//Mergesort the left half
 	serialMergeSort(array, mid);
@@ -249,17 +210,6 @@ int valid_sort(const long *array, const int len) {
 		}
 	}
 	return true;
-}
-
-/**
- *Simple function that prints an int array of length len on one line.
- * */
-void print_array(const long *array, const int len) {
-	int i;
-	for (i = 0; i < len; i++) {
-		printf("%ld, ", array[i]);
-	}
-	printf("\n");
 }
 
 void analyzeSort(long *array, int num_elements, double time, char *type){
