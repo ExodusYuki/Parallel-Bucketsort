@@ -64,7 +64,8 @@ int main(int argc, char *argv[]){
 	local_n, MPI_LONG, my_rank, MPI_COMM_WORLD);//Each process has local array
 
     /*
-     * OTHER PROCESSES
+	 *****correctly calcs and bdcsts pivots, and each process has it's local array.******
+     * 
      * TODO:Each process determines which bucket each element of it's local array
      		belongs to. Then send that element to process[i]'s bucket.
      * TODO:Once all processes have all the element assigned to their bucket they
@@ -108,11 +109,12 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	}
 	// Sort samples
 	serialMergeSort(sample_indices, num_samples);
-	
+		
 	// Find the pivots using pivots[i] = S*(i+1)/P
 	for(i = 0; i < comm_sz-1; i++) {
 		int w = (num_samples * (i+1)) / comm_sz;
 		pivots[i] = sample_indices[w];
+		printf("Pivot %d : = %d\n",i,  pivots[i]);
 	}
 	// pivots now contains the list of pivots
 }
