@@ -9,8 +9,15 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <math.h>
+#include <limts.h>
 #include <string.h>
 #include <time.h>
+
+typedef struct {
+	int count;
+	long *bucket_a;
+	int bound;
+} Bucket;
 
 // Function Prototypes
 int valid_sort(const long *array, const int len); 
@@ -72,6 +79,33 @@ int main(int argc, char *argv[]){
      * 		can create a sorted array of elements in their bucket and send their 
 	 		sorted elements back to P0.
      */
+	 int i, j;
+	 // Create array of "buckets"
+	 // The we only make pivot values for the first P-1 processes. The last
+	 // process should get anything that is greater than the last pivot.
+	 // To get everything, we make the last bucket's bound effectively
+	 // infinite.
+	 Bucket sim_buckets[comm_sz];
+	 for(i = 0; i < comm_sz-1; i++) {
+		 sim_buckets[i].bound = pivots[i];
+		 sim_buckets[i].a = malloc(sizeof(local_n));
+	 }
+	 sim_buckets[comm_sz-1].bound = INT_MAX;
+	 sim_buckets[comm_sz-1].a = malloc(sizeof(local_n));
+
+	 for(i = 0; i < local_n; i++) { //loop through local elements
+		 for(j = 0; j < comm_sz; j++) { // loops through buckets
+			 if(local_array[i] <= sim_buckets[j].bound) {
+				 Bucket sb = sim_buckets[j];
+				 sb.a[sb.count++] = local_array[i];
+				 // Break out of bucket loop, go to next element. 
+				 break;
+			 }
+		 }
+	 }
+	 // TODO Communicate with all the other processes in an offset fashion.
+	 // We wrote it down on a sheet of paper. GET THE PAPER. 
+
 
     if(my_rank == 0) {
        free(array_serial);
