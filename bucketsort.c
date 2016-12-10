@@ -105,7 +105,8 @@ int main(int argc, char *argv[]){
 	 }
 	 // TODO Communicate with all the other processes in an offset fashion.
 	 // We wrote it down on a sheet of paper. GET THE PAPER. 
-
+		
+	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
 
     if(my_rank == 0) {
        free(array_serial);
