@@ -29,6 +29,7 @@ long get_random_index(const long *array, int len);
 long min(long first, long second);
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz,
 int *pivots);
+void createBuckets(int comm_sz, int *pivots,Bucket *sim_bucket, int local_n);
 
 int main(int argc, char *argv[]){
 	
@@ -45,6 +46,7 @@ int main(int argc, char *argv[]){
 	int n = 0;
 	int local_n = n/comm_sz;
 	int *pivots;
+	Bucket sim_bucket[comm_sz];
 
 	// Process 0 gets arg and creates arrays with random vals
 	//TODO: Error check
@@ -78,14 +80,34 @@ int main(int argc, char *argv[]){
      * TODO:Once all processes have all the element assigned to their bucket they
      * 		can create a sorted array of elements in their bucket and send their 
 	 		sorted elements back to P0.
-     */
-	 int i, j;
+			*/ 
+			    
 	 // Create array of "buckets"
-	 // The we only make pivot values for the first P-1 processes. The last
-	 // process should get anything that is greater than the last pivot.
-	 // To get everything, we make the last bucket's bound effectively
-	 // infinite.
-	 Bucket sim_buckets[comm_sz];
+	createBuckets(comm_sz, pivots, &sim_bucket, local_n);
+
+	 // TODO Communicate with all the other processes in an offset fashion.
+	 // We wrote it down on a sheet of paper. GET THE PAPER. 
+		
+	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
+
+    if(my_rank == 0) {
+       free(array_serial);
+       free(array_parallel);
+    }
+
+	MPI_Finalize();
+	return 0;
+}
+	
+/*
+ Create array of "buckets"
+ The we only make pivot values for the first P-1 processes. The last
+ process should get anything that is greater than the last pivot.
+ To get everything, we make the last bucket's bound effectively infinite.
+*/
+void createBuckets(int comm_sz, int *pivots, Bucket *sim_bucket, int local_n ){
+	 int i, j;
+	 //Bucket sim_buckets[comm_sz];
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
 		 sim_buckets[i].a = malloc(sizeof(local_n));
@@ -103,18 +125,6 @@ int main(int argc, char *argv[]){
 			 }
 		 }
 	 }
-	 // TODO Communicate with all the other processes in an offset fashion.
-	 // We wrote it down on a sheet of paper. GET THE PAPER. 
-		
-	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
-
-    if(my_rank == 0) {
-       free(array_serial);
-       free(array_parallel);
-    }
-
-	MPI_Finalize();
-	return 0;
 }
 
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
