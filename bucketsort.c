@@ -46,7 +46,6 @@ int main(int argc, char *argv[]){
 	int n = 0;
 	int local_n = n/comm_sz;
 	int *pivots;
-	Bucket sim_bucket[comm_sz];
 
 	// Process 0 gets arg and creates arrays with random vals
 	//TODO: Error check
@@ -84,9 +83,6 @@ int main(int argc, char *argv[]){
 			    
 	 // Create array of "buckets"
 	createBuckets(comm_sz, pivots, &sim_bucket, local_n);
-
-	 // TODO Communicate with all the other processes in an offset fashion.
-	 // We wrote it down on a sheet of paper. GET THE PAPER. 
 		
 	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
 
@@ -98,6 +94,28 @@ int main(int argc, char *argv[]){
 	MPI_Finalize();
 	return 0;
 }
+
+/*TODO: Check and finish me
+ * Communicate with all the other processes in an offset fashion.
+ * We wrote it down on a sheet of paper. GET THE PAPER. 
+ */
+void sendRecvBuckets(int my_rank, int comm_sz, long *local_array){
+	
+	int i = 0;
+	int recv_partner = my_rank;
+	int send_partner = my_rank;
+	for(i = 0; i< comm_sz; i++){
+		send_partner += 1;
+		recv_partner -= 1;
+		if(send_partner > comm_sz-1){
+			send_partner = 0;
+		}
+		if(recv_partner < 0){
+			recv_partner = comm_size;
+		}
+		//TODO: send to send and receive from recv
+	}
+}
 	
 /*
  Create array of "buckets"
@@ -105,9 +123,9 @@ int main(int argc, char *argv[]){
  process should get anything that is greater than the last pivot.
  To get everything, we make the last bucket's bound effectively infinite.
 */
-void createBuckets(int comm_sz, int *pivots, Bucket *sim_bucket, int local_n ){
+void createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
-	 //Bucket sim_buckets[comm_sz];
+	 Bucket sim_buckets[comm_sz];
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
 		 sim_buckets[i].a = malloc(sizeof(local_n));
@@ -120,11 +138,13 @@ void createBuckets(int comm_sz, int *pivots, Bucket *sim_bucket, int local_n ){
 			 if(local_array[i] <= sim_buckets[j].bound) {
 				 Bucket sb = sim_buckets[j];
 				 sb.a[sb.count++] = local_array[i];
-				 // Break out of bucket loop, go to next element. 
+				 // Break out of bucket loop, go to next element.  
+	 			 //TODO: Call to sendRecvBuckets()???
 				 break;
 			 }
 		 }
 	 }
+
 }
 
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
