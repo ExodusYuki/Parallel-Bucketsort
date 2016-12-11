@@ -30,6 +30,8 @@ long min(long first, long second);
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz,
 int *pivots);
 void createBuckets(int comm_sz, int *pivots,Bucket *sim_bucket, int local_n);
+void updateRecvPartner(int *recv_partner, int comm_sz);
+void updateSendPartner(int *send_partner, int comm_sz);
 
 int main(int argc, char *argv[]){
 	
@@ -99,23 +101,53 @@ int main(int argc, char *argv[]){
  * Communicate with all the other processes in an offset fashion.
  * We wrote it down on a sheet of paper. GET THE PAPER. 
  */
-void sendRecvBuckets(int my_rank, int comm_sz, long *local_array){
-	
+void sendRecvBuckets(int my_rank,
+        int comm_sz, Bucket sim_buckets[], long *recv_buff){
+
 	int i = 0;
+    int recv_size = 0;
+    int num_recvd = 0;
 	int recv_partner = my_rank;
 	int send_partner = my_rank;
+    updateRecvPartner(&recv_partner);
+    updateSendPartner(&send_partner);
 	for(i = 0; i< comm_sz; i++){
-		send_partner += 1;
-		recv_partner -= 1;
-		if(send_partner > comm_sz-1){
-			send_partner = 0;
-		}
-		if(recv_partner < 0){
-			recv_partner = comm_size;
-		}
 		//TODO: send to send and receive from recv
+        if(my_rank % 2 == 0) {
+            // Send then recv
+            // Send how big the array is
+            MPI_Send(sim_bucket[send_partner].count, MPI_INT, send_partner, 0, MPI_COMM_WORLD);
+            // Send the array
+            MPI_Send(sim_bucket[send_partner], MPI_LONG, send_partner, 0, MPI_COMM_WORLD);
+            // Recv the size of the incoming array
+            MPI_Recv(&recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // Recv the buffer
+            MPI_Recv(recv_buff+num_recvd, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            // Update how many elements we have recvd by the size of the recvd array.
+            num_recvd += recv_size;
+        } else {
+            // recv then send
+            MPI_Recv(&recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(recv_buff+num_recvd, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Send(sim_bucket[send_partner].count, MPI_INT, send_partner, 0, MPI_COMM_WORLD);
+            MPI_Send(sim_bucket[send_partner], MPI_LONG, send_partner, 0, MPI_COMM_WORLD);
+        }
+        updateRecvPartner(&recv_partner);
+        updateSendPartner(&send_partner);
 	}
 }
+
+void updateRecvPartner(int *recv_partner, int comm_sz) {
+    *recv_partner -= 1;
+    if(*recv_partner <  0) {
+        *recv_partner = (comm_sz - 1);
+    }
+}
+
+void updateSendPartner(int *send_partner, int comm_sz) {
+    *send_partner = (*send_partner + 1) % comm_sz;
+}
+    
 	
 /*
  Create array of "buckets"
@@ -133,18 +165,21 @@ void createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 sim_buckets[comm_sz-1].bound = INT_MAX;
 	 sim_buckets[comm_sz-1].a = malloc(sizeof(local_n));
 
+     // Figure out who goes in each bucket
 	 for(i = 0; i < local_n; i++) { //loop through local elements
 		 for(j = 0; j < comm_sz; j++) { // loops through buckets
 			 if(local_array[i] <= sim_buckets[j].bound) {
-				 Bucket sb = sim_buckets[j];
-				 sb.a[sb.count++] = local_array[i];
-				 // Break out of bucket loop, go to next element.  
-	 			 //TODO: Call to sendRecvBuckets()???
-				 break;
+                 // This is just to assign each element into their bucket.
+                 // All elements need to be in a bucket before everyone sends
+                Bucket sb = sim_buckets[j];
+                sb.a[sb.count++] = local_array[i];
+                // break from inner loop vv
+                break;
 			 }
 		 }
 	 }
-
+     long *true_bucket = malloc(sizeof(long)*(local_n*comm_sz));
+     sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
 }
 
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
