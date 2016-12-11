@@ -15,7 +15,6 @@
 
 typedef struct {
 	int count;
-//	long *bucket_a;
 	long *a;
 	int bound;
 } Bucket;
@@ -30,9 +29,8 @@ long get_random_index(const long *array, int len);
 long min(long first, long second);
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz,
 int *pivots);
-void createBuckets(int comm_sz,int my_rank, int *pivots, int local_n, long
-*local_array);
-//void createBuckets(int comm_sz,int my_rank, int *pivots,Bucket *sim_bucket, int local_n);
+Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array);
+int sendRecvBuckets(int my_rank, int comm_sz, Bucket *sim_buckets, long *recv_buff);
 void updateRecvPartner(int *recv_partner, int comm_sz);
 void updateSendPartner(int *send_partner, int comm_sz);
 
@@ -87,10 +85,14 @@ int main(int argc, char *argv[]){
 			*/ 
 			    
 	 // Create array of "buckets"
-	createBuckets(comm_sz,my_rank, pivots, local_n, local_array);
+	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
+    long recv_buff[n];
+    int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
+    serialMergeSort(recv_buff, recv_buff_sz);
 		
 	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
 
+    free(sim_buckets);
     if(my_rank == 0) {
        free(array_serial);
        free(array_parallel);
@@ -104,8 +106,8 @@ int main(int argc, char *argv[]){
  * Communicate with all the other processes in an offset fashion.
  * We wrote it down on a sheet of paper. GET THE PAPER. 
  */
-void sendRecvBuckets(int my_rank,
-        int comm_sz, Bucket sim_buckets[], long *recv_buff){
+int sendRecvBuckets(int my_rank, 
+        int comm_sz, Bucket *sim_buckets, long *recv_buff){
 
 	int i = 0;
     int recv_size = 0;
@@ -114,45 +116,44 @@ void sendRecvBuckets(int my_rank,
 	int send_partner = my_rank;
     updateRecvPartner(&recv_partner, comm_sz);
     updateSendPartner(&send_partner, comm_sz);
-	for(i = 0; i< comm_sz; i++){
-		//TODO: send to send and receive from recv
-       /* if(my_rank % 2 == 0) {
-            // Send then recv
-            // Send how big the array is
-            MPI_Ssend(&sim_buckets[send_partner].count,1, MPI_INT, 
-				send_partner, 0, MPI_COMM_WORLD);
-            // Send the array
-            MPI_Ssend(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, 
-				send_partner, 0, MPI_COMM_WORLD);
-            // Recv the size of the incoming array
-            MPI_Recv(&recv_size,recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            // Recv the buffer
-            MPI_Recv(recv_buff+num_recvd,recv_size, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            // Update how many elements we have recvd by the size of the recvd array.
-            num_recvd += recv_size;
-        } else {
-            // recv then send
-            MPI_Recv(&recv_size,recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(recv_buff+num_recvd,recv_size, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Ssend(&sim_buckets[send_partner].count,1, MPI_INT, send_partner, 0, MPI_COMM_WORLD);
-            MPI_Ssend(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, send_partner, 0, MPI_COMM_WORLD);
-        }*/
-		MPI_Sendrecv(&sim_buckets[send_partner].count,1,
-				MPI_INT,send_partner, 0, &recv_size, recv_size, MPI_INT, recv_partner,
-				0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	for(i = 0; i < comm_sz; i++){
+        // Send size of the bucket to send_partner,
+        // recv size of incoming buffer from recv_partner
+		MPI_Sendrecv(
+            &sim_buckets[send_partner].count, // Send size of outgoing array
+            1,                              // We are sending one value
+            MPI_INT,                        // Type = int
+            send_partner,                   // Sending it to our send partner
+            0,                              // TAG
+            &recv_size,                     // We want to recv into the recv_size variable
+            1,                              // we get one value
+            MPI_INT,                        // Also of type int
+            recv_partner,                   // From our recv partner
+            0,                              // TAG
+            MPI_COMM_WORLD,                 // Communicator
+            MPI_STATUS_IGNORE               // Status
+        );
 
-		MPI_Sendrecv(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, 
-				send_partner,0,recv_buff+num_recvd,recv_size,MPI_LONG,recv_partner, 0,
-				MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+		MPI_Sendrecv(
+            &sim_buckets[send_partner],     // Send the array
+            sim_buckets[send_partner].count,// We want to send the whole array
+            MPI_LONG,                       // TYPE = LONG
+            send_partner,                   // Send to send partner
+            0,                              // TAG
+            recv_buff+num_recvd,            // Recv into recv_buff+number of elements already recvd
+            recv_size,                      // Recv amount of elements = to recv_size
+            MPI_LONG,                       // TYPE = LONG
+            recv_partner,                   // recv from recv_partner
+            0,                              // TAG
+            MPI_COMM_WORLD,                 // Communicator
+            MPI_STATUS_IGNORE               // Status
+        );
 
-		if(my_rank %2 ==0)
-			num_recvd += recv_size;
-
-
-
+        num_recvd += recv_size;
         updateRecvPartner(&recv_partner, comm_sz);
         updateSendPartner(&send_partner, comm_sz);
 	}
+    return num_recvd;
 }
 
 void updateRecvPartner(int *recv_partner, int comm_sz) {
@@ -173,9 +174,9 @@ void updateSendPartner(int *send_partner, int comm_sz) {
  process should get anything that is greater than the last pivot.
  To get everything, we make the last bucket's bound effectively infinite.
 */
-void createBuckets(int comm_sz,int my_rank, int *pivots, int local_n, long *local_array){
+Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
-	 Bucket sim_buckets[comm_sz];
+	 Bucket *sim_buckets = malloc(sizeof(Bucket)*comm_sz);
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
 		 sim_buckets[i].a = malloc(sizeof(local_n));
@@ -196,10 +197,9 @@ void createBuckets(int comm_sz,int my_rank, int *pivots, int local_n, long *loca
 			 }
 		 }
 	 }
-	 //TODO: I changed this...I think you meant to call it recv_buff??
-    // long *true_bucket = malloc(sizeof(long)*(local_n*comm_sz));
-     long *recv_buff = malloc(sizeof(long)*(local_n*comm_sz));
-	 sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
+     return sim_buckets; // TODO Free this
+     /* long *recv_buff = malloc(sizeof(long)*(local_n*comm_sz)); */
+	 /* sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff); */
 }
 
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
