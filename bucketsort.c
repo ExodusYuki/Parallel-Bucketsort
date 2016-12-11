@@ -116,28 +116,40 @@ void sendRecvBuckets(int my_rank,
     updateSendPartner(&send_partner, comm_sz);
 	for(i = 0; i< comm_sz; i++){
 		//TODO: send to send and receive from recv
-        if(my_rank % 2 == 0) {
+       /* if(my_rank % 2 == 0) {
             // Send then recv
             // Send how big the array is
-			//TODO: These calls need second param (msg size)
-            MPI_Send(sim_buckets[send_partner].count, MPI_INT, 
+            MPI_Ssend(&sim_buckets[send_partner].count,1, MPI_INT, 
 				send_partner, 0, MPI_COMM_WORLD);
             // Send the array
-            MPI_Send(sim_buckets[send_partner], MPI_LONG, 
+            MPI_Ssend(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, 
 				send_partner, 0, MPI_COMM_WORLD);
             // Recv the size of the incoming array
-            MPI_Recv(&recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&recv_size,recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             // Recv the buffer
-            MPI_Recv(recv_buff+num_recvd, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(recv_buff+num_recvd,recv_size, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             // Update how many elements we have recvd by the size of the recvd array.
             num_recvd += recv_size;
         } else {
             // recv then send
-            MPI_Recv(&recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(recv_buff+num_recvd, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(sim_buckets[send_partner].count, MPI_INT, send_partner, 0, MPI_COMM_WORLD);
-            MPI_Send(sim_buckets[send_partner], MPI_LONG, send_partner, 0, MPI_COMM_WORLD);
-        }
+            MPI_Recv(&recv_size,recv_size, MPI_INT, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(recv_buff+num_recvd,recv_size, MPI_LONG, recv_partner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Ssend(&sim_buckets[send_partner].count,1, MPI_INT, send_partner, 0, MPI_COMM_WORLD);
+            MPI_Ssend(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, send_partner, 0, MPI_COMM_WORLD);
+        }*/
+		MPI_Sendrecv(&sim_buckets[send_partner].count,1,
+				MPI_INT,send_partner, 0, &recv_size, recv_size, MPI_INT, recv_partner,
+				0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		MPI_Sendrecv(&sim_buckets[send_partner],sim_buckets[send_partner].count, MPI_LONG, 
+				send_partner,0,recv_buff+num_recvd,recv_size,MPI_LONG,recv_partner, 0,
+				MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+
+		if(my_rank %2 ==0)
+			num_recvd += recv_size;
+
+
+
         updateRecvPartner(&recv_partner, comm_sz);
         updateSendPartner(&send_partner, comm_sz);
 	}
