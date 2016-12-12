@@ -74,7 +74,10 @@ int main(int argc, char *argv[]){
 			//printf("local_array[%d]: %ld\n",i,local_array[i]);
 
 		}
-		
+		int j;
+		for(j=0;j<local_n;j++){
+			local_array[j] = 0;
+		}
 		// Broadcast pivots and scatter parallel array
 		MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 		MPI_Scatter(array_parallel, // Distribute the array
