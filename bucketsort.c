@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
 		for(j=0;j<local_n;j++){
 			local_array[j] = 0;
 		}
-		// Broadcast pivots and scatter parallel array
+		/* Broadcast pivots and scatter parallel array
 		MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 		MPI_Scatter(array_parallel, // Distribute the array
 		local_n,					// Number each proceess handles
@@ -88,9 +88,9 @@ int main(int argc, char *argv[]){
 		MPI_LONG, 					//Type
 		0,							//Root
 		MPI_COMM_WORLD);
-
-	}//End process 0
-
+	}
+	}*/
+	}
 		MPI_Scatter(array_parallel, // Distribute the array
 		local_n,					// Number each proceess handles
 		MPI_LONG, 					// TYPE
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]){
 		MPI_COMM_WORLD);
 		//Each process should have local array
 	
-	printf("process %d's local_array[2] is: %ld\n",my_rank,local_array[2]);
+	printf("process %d's local_array[2] is: %ld\n",my_rank,*(local_array+2));
 
     /*
 	 *****correctly calcs and bdcsts pivots, and each process has it's local array.******
