@@ -33,6 +33,7 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array);
 int sendRecvBuckets(int my_rank, int comm_sz, Bucket *sim_buckets, long *recv_buff);
 void updateRecvPartner(int *recv_partner, int comm_sz);
 void updateSendPartner(int *send_partner, int comm_sz);
+void printBuckets(Bucket *sim_buckets, int num_buckets);
 
 int main(int argc, char *argv[]){
 	
@@ -86,6 +87,12 @@ int main(int argc, char *argv[]){
 			    
 	 // Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
+    if(my_rank == 0) {
+        printBuckets(sim_buckets, comm_sz);
+    }
+    /* Make sure buckets are filled before this point */
+	MPI_Finalize();
+    return 0;
     long recv_buff[n];
     int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
     serialMergeSort(recv_buff, recv_buff_sz);
@@ -102,6 +109,25 @@ int main(int argc, char *argv[]){
 	return 0;
 }
 
+void printBuckets(Bucket *sim_buckets, int num_buckets) {
+    int i;
+    for(i = 0; i < num_buckets; i++) {
+        Bucket sb = sim_buckets[i];
+        printf("Bucket #%d:\n", i+1);
+        printf("\tcount: %d\n", sb.count);
+        printf("\tbound: %d\n", sb.bound);
+        int j;
+        printf("\tarray:\n");
+        for(j = 0; j < sb.count; j++) {
+           printf("%ld ", sb.a[j]);
+        }
+        printf("\n");
+        printf("=================");
+    }
+    printf("\n");
+}
+
+
 /*TODO: Check and finish me
  * Communicate with all the other processes in an offset fashion.
  * We wrote it down on a sheet of paper. GET THE PAPER. 
@@ -116,9 +142,17 @@ int sendRecvBuckets(int my_rank,
 	int send_partner = my_rank;
     updateRecvPartner(&recv_partner, comm_sz);
     updateSendPartner(&send_partner, comm_sz);
+    if(my_rank == 0) {
+        printf("Send/recving\n");
+    }
 	for(i = 0; i < comm_sz; i++){
         // Send size of the bucket to send_partner,
         // recv size of incoming buffer from recv_partner
+        if(my_rank == 0) {
+            printf("Round #%d\n", i+1);
+            printf("Sending to %d\nRecving from %d\n", send_partner, recv_partner);
+            printf("Num sending %d\n", sim_buckets[send_partner].count);
+        }
 		MPI_Sendrecv(
             &sim_buckets[send_partner].count, // Send size of outgoing array
             1,                              // We are sending one value
@@ -134,6 +168,10 @@ int sendRecvBuckets(int my_rank,
             MPI_STATUS_IGNORE               // Status
         );
 
+        if(my_rank == 0) {
+            printf("Incoming buffer is of size %d\n", recv_size);
+            printf("Outgoing buffer is of size %d\n", sim_buckets[send_partner].count);
+        }
 		MPI_Sendrecv(
             &sim_buckets[send_partner],     // Send the array
             sim_buckets[send_partner].count,// We want to send the whole array
@@ -176,13 +214,13 @@ void updateSendPartner(int *send_partner, int comm_sz) {
 */
 Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
-	 Bucket *sim_buckets = malloc(sizeof(Bucket)*comm_sz);
+	 Bucket *sim_buckets = calloc(sizeof(Bucket), comm_sz);
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
-		 sim_buckets[i].a = malloc(sizeof(local_n));
+		 sim_buckets[i].a = calloc(sizeof(long), local_n);
 	 }
 	 sim_buckets[comm_sz-1].bound = INT_MAX;
-	 sim_buckets[comm_sz-1].a = malloc(sizeof(local_n));
+	 sim_buckets[comm_sz-1].a = calloc(sizeof(long), local_n);
 
      // Figure out who goes in each bucket
 	 for(i = 0; i < local_n; i++) { //loop through local elements
@@ -191,7 +229,8 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
                  // This is just to assign each element into their bucket.
                  // All elements need to be in a bucket before everyone sends
                 Bucket sb = sim_buckets[j];
-                sb.a[sb.count++] = local_array[i];
+                sb.a[sb.count]= local_array[i];
+                sb.count += 1;
                 // break from inner loop vv
                 break;
 			 }
