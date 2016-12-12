@@ -39,41 +39,66 @@ int main(int argc, char *argv[]){
 	
 	int comm_sz; /* Number of processes */
 	int my_rank;   /* My process rank*/
-
+    
 	// MPI initializations
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-    long *array_serial;
+
+	long *array_serial;
     long *array_parallel;
 	long *local_array;
 	int n = 0;
 	int local_n = n/comm_sz;
 	int *pivots;
-
+	
 	// Process 0 gets arg and creates arrays with random vals
 	//TODO: Error check
 	if(my_rank == 0){
 		printf("Enter number of elements to sort\n");
 		scanf("%d", &n);
 	}
-	// Broadcast N
+		// Broadcast N
 	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
-	// Arrays
+	//Arrays
 	array_parallel = malloc(n*sizeof(long));
 	local_array = malloc(sizeof(long) * local_n);
 	pivots = malloc(sizeof(int) * (comm_sz-1));
-
-	// Process 0 sorts serial array
+		
 	if(my_rank == 0) {
 		array_serial = malloc(n*sizeof(long));
+		int i;
 		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
-	}
+		for( i = 0;i < n; i++){
+			printf("parallel array[%d] : %ld\n",i, array_parallel[i]);
+			//printf("local_array[%d]: %ld\n",i,local_array[i]);
+
+		}
+		
+		// Broadcast pivots and scatter parallel array
+		MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
+		MPI_Scatter(array_parallel, // Distribute the array
+		local_n,					// Number each proceess handles
+		MPI_LONG, 					// TYPE
+		local_array,				// Receive Buffer
+		local_n,					// Receive count
+		MPI_LONG, 					//Type
+		0,							//Root
+		MPI_COMM_WORLD);
+
+	}//End process 0
+
+		MPI_Scatter(array_parallel, // Distribute the array
+		local_n,					// Number each proceess handles
+		MPI_LONG, 					// TYPE
+		local_array,				// Receive Buffer
+		local_n,					// Receive count
+		MPI_LONG, 					//Type
+		my_rank,							//Root
+		MPI_COMM_WORLD);
+		//Each process should have local array
 	
-	// Broadcast pivots and scatter parallel array
-	MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Scatter(array_parallel, local_n, MPI_LONG, local_array,
-	local_n, MPI_LONG, my_rank, MPI_COMM_WORLD);//Each process has local array
+	printf("process %d's local_array[2] is: %ld\n",my_rank,local_array[2]);
 
     /*
 	 *****correctly calcs and bdcsts pivots, and each process has it's local array.******
@@ -91,7 +116,7 @@ int main(int argc, char *argv[]){
         printBuckets(sim_buckets, comm_sz);
     }
     /* Make sure buckets are filled before this point */
-	MPI_Finalize();
+//	MPI_Finalize();
     return 0;
     long recv_buff[n];
     int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
@@ -214,6 +239,8 @@ void updateSendPartner(int *send_partner, int comm_sz) {
 */
 Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
+
+	//printf("local_array is: %ld\n", local_array[0]);
 	 Bucket *sim_buckets = calloc(sizeof(Bucket), comm_sz);
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
@@ -221,7 +248,6 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 }
 	 sim_buckets[comm_sz-1].bound = INT_MAX;
 	 sim_buckets[comm_sz-1].a = calloc(sizeof(long), local_n);
-
      // Figure out who goes in each bucket
 	 for(i = 0; i < local_n; i++) { //loop through local elements
 		 for(j = 0; j < comm_sz; j++) { // loops through buckets
