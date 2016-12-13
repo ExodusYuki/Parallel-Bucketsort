@@ -95,9 +95,9 @@ int main(int argc, char *argv[]){
 			    
 	 // Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
-   	
+	   	
     if(my_rank == 0) {
-        printBuckets(sim_buckets, comm_sz);
+		printBuckets(sim_buckets, comm_sz);
     }
     
 	/* Make sure buckets are filled before this point */
@@ -126,7 +126,7 @@ void printBuckets(Bucket *sim_buckets, int num_buckets) {
         printf("\tcount: %d\n", sb.count);
         printf("\tbound: %d\n", sb.bound);
         int j;
-        printf("\tarray:\n");
+        printf("\tarray:");
         for(j = 0; j < sb.count; j++) {
            printf("%ld ", sb.a[j]);
         }
@@ -224,7 +224,6 @@ void updateSendPartner(int *send_partner, int comm_sz) {
 Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
 
-	//printf("local_array is: %ld\n", local_array[0]);
 	 Bucket *sim_buckets = calloc(sizeof(Bucket), comm_sz);
 	 for(i = 0; i < comm_sz-1; i++) {
 		 sim_buckets[i].bound = pivots[i];
@@ -232,18 +231,22 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 }
 	 sim_buckets[comm_sz-1].bound = INT_MAX;
 	 sim_buckets[comm_sz-1].a = calloc(sizeof(long), local_n);
-     // Figure out who goes in each bucket
+     
+	 // Figure out who goes in each bucket
 	 for(i = 0; i < local_n; i++) { //loop through local elements
 		 for(j = 0; j < comm_sz; j++) { // loops through buckets
 			 if(local_array[i] <= sim_buckets[j].bound) {
-                 // This is just to assign each element into their bucket.
-                 // All elements need to be in a bucket before everyone sends
-                Bucket sb = sim_buckets[j];
-                sb.a[sb.count]= local_array[i];
-                sb.count += 1;
-                // break from inner loop vv
+			    // This is just to assign each element into their bucket.
+                // All elements need to be in a bucket before everyone sends
+               // Bucket sb = sim_buckets[j];
+                sim_buckets[j].a[i]= local_array[i];
+                sim_buckets[j].count += 1;
+				//printf("local_array[%d] = %ld\n", i, local_array[i]);
+				//printf("sb.a[%d] = %ld\n",i, sb.a[i]);
+                // break from inner loop vvi
                 break;
 			 }
+
 		 }
 	 }
      return sim_buckets; // TODO Free this
