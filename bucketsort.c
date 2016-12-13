@@ -81,24 +81,25 @@ int main(int argc, char *argv[]){
 		0,							//Root
 		MPI_COMM_WORLD);
 		//Each now has local array
-	
 
-    /*
-	 *****correctly calcs and bdcsts pivots, and each process has it's local array.******
-     * 
-     * TODO:Each process determines which bucket each element of it's local array
-     		belongs to. Then send that element to process[i]'s bucket.
-     * TODO:Once all processes have all the element assigned to their bucket they
-     * 		can create a sorted array of elements in their bucket and send their 
-	 		sorted elements back to P0.
-			*/ 
+	/*Now calcs and bdcsts pivots, and each process has it's local array**/ 
 			    
 	 // Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
-	   	
-    if(my_rank == 0) {
+	int k;
+
+	//Sort each bucket's array
+	for(k= 0; k < comm_sz; k++){
+		serialMergeSort(sim_buckets[k].a, local_n);
+	}
+
+	//Print Bucket
+   	if(my_rank == 0) {
 		printBuckets(sim_buckets, comm_sz);
-    }
+	}
+
+	//TODO: Send each array to P0 and have P0 k-wise merge
+   
     
 	/* Make sure buckets are filled before this point */
     return 0;
@@ -116,6 +117,21 @@ int main(int argc, char *argv[]){
 
 	MPI_Finalize();
 	return 0;
+}
+
+
+//TODO: Finish...my brain is dead now
+void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
+	
+	int k_merge[n];
+	int i, j;
+	for(i = 0; i< comm_sz; i++){
+		if(sim_buckets[i].a[0] > sim_buckets[i+1].a[local_n-1]){
+				//TODO: Add toarray : k_merge[i*local_n] = sim_buckets[i+1].a;
+		}else{
+			//TODO: Add to array k_merge[i*local_n] = sim_buckets[i].a
+		}
+
 }
 
 void printBuckets(Bucket *sim_buckets, int num_buckets) {
@@ -238,11 +254,8 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 			 if(local_array[i] <= sim_buckets[j].bound) {
 			    // This is just to assign each element into their bucket.
                 // All elements need to be in a bucket before everyone sends
-               // Bucket sb = sim_buckets[j];
                 sim_buckets[j].a[i]= local_array[i];
                 sim_buckets[j].count += 1;
-				//printf("local_array[%d] = %ld\n", i, local_array[i]);
-				//printf("sb.a[%d] = %ld\n",i, sb.a[i]);
                 // break from inner loop vvi
                 break;
 			 }
@@ -250,8 +263,6 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 		 }
 	 }
      return sim_buckets; // TODO Free this
-     /* long *recv_buff = malloc(sizeof(long)*(local_n*comm_sz)); */
-	 /* sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff); */
 }
 
 void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
