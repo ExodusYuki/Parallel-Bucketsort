@@ -83,29 +83,62 @@ int main(int argc, char *argv[]){
 		//Each now has local array
 
 	/*Now calcs and bdcsts pivots, and each process has it's local array**/ 
-			    
+	if(my_rank ==0){
+		int i;
+		for(i = 0; i< n; i++){
+			printf("parallel array: %ld\n", array_parallel[i]);			    
+		}
+	}
 	 // Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
-	int k;
-
-	//Sort each bucket's array
-	for(k= 0; k < comm_sz; k++){
-		serialMergeSort(sim_buckets[k].a, local_n);
-	}
 
 	//Print Bucket
    	if(my_rank == 0) {
 		printBuckets(sim_buckets, comm_sz);
 	}
-
-	//TODO: Send each array to P0 and have P0 k-wise merge
-   
     
 	/* Make sure buckets are filled before this point */
-    return 0;
-    long recv_buff[n];
-    int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
-    serialMergeSort(recv_buff, recv_buff_sz);
+    //TODO: Remove me
+	return 0;
+	long recv_buff[n];
+ 	int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
+  	serialMergeSort(recv_buff, recv_buff_sz);
+
+
+	/* Process 0 gathers the buckets-- see book pg. 113*/
+	long *final_array = NULL;
+	if(my_rank == 0){
+		final_array = malloc(n*sizeof(long));
+		MPI_Gather(
+			recv_buff,       //send buffer
+			recv_buff_sz,   //send count
+			MPI_INT,		//send type
+			final_array,	//receive buffer
+			recv_buff_sz,	//receive count
+			MPI_INT,		//receive type
+			0,				//destination process
+			MPI_COMM_WORLD); //communicator
+
+	}
+
+	MPI_Gather(
+		recv_buff,       //send buffer
+		recv_buff_sz,   //send count
+		MPI_INT,		//send type
+		final_array,	//receive buffer
+		recv_buff_sz,	//receive count
+		MPI_INT,		//receive type
+		0,				//destination process
+		MPI_COMM_WORLD); //communicator
+		
+	if(my_rank == 0){
+		//TODO: Need k-wise merge?
+		int i;
+		for(i=0; i< n; i++){
+
+			printf("final_array: %ld\n", final_array[i]);
+		}
+	}
 		
 	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
 
@@ -120,7 +153,7 @@ int main(int argc, char *argv[]){
 }
 
 
-//TODO: Finish...my brain is dead now
+/*/TODO: Finish...my brain is dead now
 void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
 	
 	int k_merge[n];
@@ -132,7 +165,7 @@ void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
 			//TODO: Add to array k_merge[i*local_n] = sim_buckets[i].a
 		}
 
-}
+}*/
 
 void printBuckets(Bucket *sim_buckets, int num_buckets) {
     int i;
