@@ -12,6 +12,7 @@
 #include <limits.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 typedef struct {
 	int count;
@@ -33,6 +34,9 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array);
 int sendRecvBuckets(int my_rank, int comm_sz, Bucket *sim_buckets, long *recv_buff);
 void updateRecvPartner(int *recv_partner, int comm_sz);
 void updateSendPartner(int *send_partner, int comm_sz);
+void printAllBuckets(Bucket *sim_buckets, int my_rank, int len);
+void printAllArray(long *array, int my_rank, int len);
+void printArray(long *array, int len);
 void printBuckets(Bucket *sim_buckets, int num_buckets);
 
 int main(int argc, char *argv[]){
@@ -62,8 +66,8 @@ int main(int argc, char *argv[]){
 	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
 	local_n = n/comm_sz;
 	
-	//Arrays
-	array_parallel = malloc(n*sizeof(long));
+	// Allocate arrays
+	array_parallel = malloc(sizeof(long) * n);
 	local_array = malloc(sizeof(long) * local_n);
 	pivots = malloc(sizeof(int) * (comm_sz-1));
 		
@@ -72,33 +76,39 @@ int main(int argc, char *argv[]){
 		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
 	}
 
-		MPI_Scatter(array_parallel, // Distribute the array
-		local_n,					// Number each proceess handles
-		MPI_LONG, 					// TYPE
-		local_array,				// Receive Buffer
-		local_n,					// Receive count
-		MPI_LONG, 					//Type
-		0,							//Root
-		MPI_COMM_WORLD);
-		//Each now has local array
+    // Broadcast pivots
+    MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	/*Now calcs and bdcsts pivots, and each process has it's local array**/ 
-	if(my_rank ==0){
-		int i;
-		for(i = 0; i< n; i++){
-			printf("parallel array: %ld\n", array_parallel[i]);			    
-		}
-	}
-	 // Create array of "buckets"
+
+    MPI_Scatter(array_parallel, // Distribute the array
+        local_n,					// Number each proceess handles
+        MPI_LONG, 					// TYPE
+        local_array,				// Receive Buffer
+        local_n,					// Receive count
+        MPI_LONG, 					//Type
+        0,							//Root
+        MPI_COMM_WORLD
+    );
+    //Each now has local array
+
+
+	/* if(my_rank == 0) { */
+	/* 	int i; */
+	/* 	for(i = 0; i< n; i++){ */
+	/* 		printf("parallel array: %ld\n", array_parallel[i]);			     */
+	/* 	} */
+	/* } */
+
+	// Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
 
 	//Print Bucket
-   	if(my_rank == 0) {
-		printBuckets(sim_buckets, comm_sz);
-	}
+    printAllBuckets(sim_buckets, my_rank, comm_sz);
+
     
 	/* Make sure buckets are filled before this point */
     //TODO: Remove me
+    MPI_Finalize();
 	return 0;
 	long recv_buff[n];
  	int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
@@ -150,39 +160,6 @@ int main(int argc, char *argv[]){
 
 	MPI_Finalize();
 	return 0;
-}
-
-
-/*/TODO: Finish...my brain is dead now
-void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
-	
-	int k_merge[n];
-	int i, j;
-	for(i = 0; i< comm_sz; i++){
-		if(sim_buckets[i].a[0] > sim_buckets[i+1].a[local_n-1]){
-				//TODO: Add toarray : k_merge[i*local_n] = sim_buckets[i+1].a;
-		}else{
-			//TODO: Add to array k_merge[i*local_n] = sim_buckets[i].a
-		}
-
-}*/
-
-void printBuckets(Bucket *sim_buckets, int num_buckets) {
-    int i;
-    for(i = 0; i < num_buckets; i++) {
-        Bucket sb = sim_buckets[i];
-        printf("Bucket #%d:\n", i+1);
-        printf("\tcount: %d\n", sb.count);
-        printf("\tbound: %d\n", sb.bound);
-        int j;
-        printf("\tarray:");
-        for(j = 0; j < sb.count; j++) {
-           printf("%ld ", sb.a[j]);
-        }
-        printf("\n");
-        printf("=================");
-    }
-    printf("\n");
 }
 
 
@@ -334,6 +311,82 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	}
 	// pivots now contains the list of pivots
 }
+
+/*/TODO: Finish...my brain is dead now
+void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
+	
+	int k_merge[n];
+	int i, j;
+	for(i = 0; i< comm_sz; i++){
+		if(sim_buckets[i].a[0] > sim_buckets[i+1].a[local_n-1]){
+				//TODO: Add toarray : k_merge[i*local_n] = sim_buckets[i+1].a;
+		}else{
+			//TODO: Add to array k_merge[i*local_n] = sim_buckets[i].a
+		}
+
+}*/
+
+void printAllBuckets(Bucket *sim_buckets, int my_rank, int len) {
+   	if(my_rank == 0) {
+		printBuckets(sim_buckets, len);
+	} else if(my_rank == 1) {
+        sleep(1);
+		printBuckets(sim_buckets, len);
+    } else if(my_rank == 2) {
+        sleep(2);
+		printBuckets(sim_buckets, len);
+    } else if(my_rank == 3) {
+        sleep(3);
+		printBuckets(sim_buckets, len);
+    }
+}
+
+void printAllArray(long *array, int my_rank, int len) {
+   	if(my_rank == 0) {
+        printf("Array for #%d\n", my_rank);
+		printArray(array, len);
+	} else if(my_rank == 1) {
+        sleep(1);
+        printf("Array for #%d\n", my_rank);
+		printArray(array, len);
+    } else if(my_rank == 2) {
+        sleep(2);
+        printf("Array for #%d\n", my_rank);
+		printArray(array, len);
+    } else if(my_rank == 3) {
+        sleep(3);
+        printf("Array for #%d\n", my_rank);
+		printArray(array, len);
+        printf("====================\n");
+    }
+}
+
+void printArray(long *array, int len) {
+    int i;
+    for(i = 0; i < len; i++) {
+        printf("%ld ", array[i]);
+    }
+    printf("\n");
+}
+
+void printBuckets(Bucket *sim_buckets, int num_buckets) {
+    int i;
+    for(i = 0; i < num_buckets; i++) {
+        Bucket sb = sim_buckets[i];
+        printf("Bucket #%d:\n", i+1);
+        printf("\tcount: %d\n", sb.count);
+        printf("\tbound: %d\n", sb.bound);
+        int j;
+        printf("\tarray:");
+        for(j = 0; j < sb.count; j++) {
+           printf("%ld ", sb.a[j]);
+        }
+        printf("\n");
+        printf("=================");
+    }
+    printf("\n");
+}
+
 
 /* Finds the minimum of two longs
  */
