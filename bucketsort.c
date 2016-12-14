@@ -102,7 +102,9 @@ int main(int argc, char *argv[]){
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
 
 	//Print Bucket
-    printAllBuckets(sim_buckets, my_rank, comm_sz);
+    if(my_rank == 0)
+        printBuckets(sim_buckets, comm_sz);
+    //printAllBuckets(sim_buckets, my_rank, comm_sz);
 
 	/* Make sure buckets are filled before this point */
     //TODO: Remove me
@@ -262,7 +264,8 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 			 if(local_array[i] <= sim_buckets[j].bound) {
 			    // This is just to assign each element into their bucket.
                 // All elements need to be in a bucket before everyone sends
-                sim_buckets[j].a[i]= local_array[i];
+                int local_count = sim_buckets[j].count;
+                sim_buckets[j].a[local_count]= local_array[i];
                 sim_buckets[j].count += 1;
                 // break from inner loop vvi
                 break;
@@ -305,7 +308,6 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	for(i = 0; i < comm_sz-1; i++) {
 		int w = (num_samples * (i+1)) / comm_sz;
 		pivots[i] = sample_indices[w];
-		printf("Pivot %d : = %d\n",i,  pivots[i]);
 	}
 	// pivots now contains the list of pivots
 }
