@@ -90,44 +90,33 @@ int main(int argc, char *argv[]){
     );
     //Each now has local array
 
-
-	/* if(my_rank == 0) { */
-	/* 	int i; */
-	/* 	for(i = 0; i< n; i++){ */
-	/* 		printf("parallel array: %ld\n", array_parallel[i]);			     */
-	/* 	} */
-	/* } */
-
 	// Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
 
-	//Print Bucket
-    if(my_rank == 0)
-        printBuckets(sim_buckets, comm_sz);
-    //printAllBuckets(sim_buckets, my_rank, comm_sz);
-
-	/* Make sure buckets are filled before this point */
-    //TODO: Remove me
-    MPI_Finalize();
-	return 0;
 	long recv_buff[n];
  	int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
   	serialMergeSort(recv_buff, recv_buff_sz);
+    if(my_rank == 0) {
+        printf("P0 bound = %d\n", sim_buckets[0].bound);
+        printArray(recv_buff, recv_buff_sz);
+    }
+	MPI_Finalize();
+	return 0;
 
 
 	/* Process 0 gathers the buckets-- see book pg. 113*/
 	long *final_array = NULL;
 	if(my_rank == 0){
 		final_array = malloc(n*sizeof(long));
-		MPI_Gather(
-			recv_buff,       //send buffer
-			recv_buff_sz,   //send count
-			MPI_INT,		//send type
-			final_array,	//receive buffer
-			recv_buff_sz,	//receive count
-			MPI_INT,		//receive type
-			0,				//destination process
-			MPI_COMM_WORLD); //communicator
+		/* MPI_Gather( */
+		/* 	recv_buff,       //send buffer */
+		/* 	recv_buff_sz,   //send count */
+		/* 	MPI_INT,		//send type */
+		/* 	final_array,	//receive buffer */
+		/* 	recv_buff_sz,	//receive count */
+		/* 	MPI_INT,		//receive type */
+		/* 	0,				//destination process */
+		/* 	MPI_COMM_WORLD); //communicator */
 
 	}
 
@@ -140,6 +129,8 @@ int main(int argc, char *argv[]){
 		MPI_INT,		//receive type
 		0,				//destination process
 		MPI_COMM_WORLD); //communicator
+    if(my_rank == 0)
+        printArray(final_array, n);
 		
 	if(my_rank == 0){
 		//TODO: Need k-wise merge?
@@ -177,9 +168,6 @@ int sendRecvBuckets(int my_rank,
 	int send_partner = my_rank;
     updateRecvPartner(&recv_partner, comm_sz);
     updateSendPartner(&send_partner, comm_sz);
-    if(my_rank == 0) {
-        printf("Send/recving\n");
-    }
 	for(i = 0; i < comm_sz; i++){
         // Send size of the bucket to send_partner,
         // recv size of incoming buffer from recv_partner
@@ -208,7 +196,7 @@ int sendRecvBuckets(int my_rank,
             printf("Outgoing buffer is of size %d\n", sim_buckets[send_partner].count);
         }
 		MPI_Sendrecv(
-            &sim_buckets[send_partner],     // Send the array
+            sim_buckets[send_partner].a,     // Send the array
             sim_buckets[send_partner].count,// We want to send the whole array
             MPI_LONG,                       // TYPE = LONG
             send_partner,                   // Send to send partner
