@@ -79,7 +79,6 @@ int main(int argc, char *argv[]){
     // Broadcast pivots
     MPI_Bcast(pivots, comm_sz-1, MPI_INT, 0, MPI_COMM_WORLD);
 
-
     MPI_Scatter(array_parallel, // Distribute the array
         local_n,					// Number each proceess handles
         MPI_LONG, 					// TYPE
@@ -105,7 +104,6 @@ int main(int argc, char *argv[]){
 	//Print Bucket
     printAllBuckets(sim_buckets, my_rank, comm_sz);
 
-    
 	/* Make sure buckets are filled before this point */
     //TODO: Remove me
     MPI_Finalize();
@@ -298,7 +296,7 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	int i;
 	srand(time(NULL));
 	for(i = 0; i < num_samples; i++) {
-		sample_indices[i] = rand() % n;
+		sample_indices[i] = array_parallel[rand() % n];
 	}
 	// Sort samples
 	serialMergeSort(sample_indices, num_samples);
@@ -382,7 +380,7 @@ void printBuckets(Bucket *sim_buckets, int num_buckets) {
            printf("%ld ", sb.a[j]);
         }
         printf("\n");
-        printf("=================");
+        printf("=================\n");
     }
     printf("\n");
 }
