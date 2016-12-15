@@ -49,6 +49,7 @@ int main(int argc, char *argv[]){
 	int n;
 	int local_n;
 	int *pivots;
+    struct timeval tv1, tv2;
 
 	// MPI initializations
 	MPI_Init(&argc, &argv);
@@ -63,7 +64,7 @@ int main(int argc, char *argv[]){
 	}
 	
 	// Broadcast N
-	MPI_Bcast(&n,1,MPI_INT,0,MPI_COMM_WORLD);
+	MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	local_n = n/comm_sz;
 	
 	// Allocate arrays
@@ -74,6 +75,7 @@ int main(int argc, char *argv[]){
 	if(my_rank == 0) {
 		array_serial = malloc(n*sizeof(long));
 		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
+        gettimeofday(&tv1, NULL);
 	}
 
     // Broadcast pivots
@@ -88,7 +90,7 @@ int main(int argc, char *argv[]){
         0,							//Root
         MPI_COMM_WORLD
     );
-    //Each now has local array
+    // Each now has local array
 
 	// Create array of "buckets"
 	Bucket *sim_buckets = createBuckets(comm_sz, pivots, local_n, local_array);
@@ -96,52 +98,39 @@ int main(int argc, char *argv[]){
 	long recv_buff[n];
  	int recv_buff_sz = sendRecvBuckets(my_rank, comm_sz, sim_buckets, recv_buff);
   	serialMergeSort(recv_buff, recv_buff_sz);
-    if(my_rank == 0) {
-        printf("P0 bound = %d\n", sim_buckets[0].bound);
-        printArray(recv_buff, recv_buff_sz);
-    }
-	MPI_Finalize();
-	return 0;
-
 
 	/* Process 0 gathers the buckets-- see book pg. 113*/
-	long *final_array = NULL;
+    long *final_array = NULL;
 	if(my_rank == 0){
-		final_array = malloc(n*sizeof(long));
-		/* MPI_Gather( */
-		/* 	recv_buff,       //send buffer */
-		/* 	recv_buff_sz,   //send count */
-		/* 	MPI_INT,		//send type */
-		/* 	final_array,	//receive buffer */
-		/* 	recv_buff_sz,	//receive count */
-		/* 	MPI_INT,		//receive type */
-		/* 	0,				//destination process */
-		/* 	MPI_COMM_WORLD); //communicator */
-
+		final_array = calloc(sizeof(long), n);
 	}
 
-	MPI_Gather(
-		recv_buff,       //send buffer
-		recv_buff_sz,   //send count
-		MPI_INT,		//send type
-		final_array,	//receive buffer
-		recv_buff_sz,	//receive count
-		MPI_INT,		//receive type
-		0,				//destination process
-		MPI_COMM_WORLD); //communicator
-    if(my_rank == 0)
-        printArray(final_array, n);
+    /*
+     * Put bucket stuff in array, then recv from other processes into the final array
+     */
+    if(my_rank == 0) {
+        int off = 0;
+        for(off = 0; off < recv_buff_sz; off++) {
+            final_array[off] = recv_buff[off];
+        }
+        int i;
+        int incoming_size = 0;
+        for(i = 1; i < comm_sz; i++) {
+            MPI_Recv(&incoming_size, 1, MPI_INT, i, 0, MPI_COMM_WORLD, NULL);
+            MPI_Recv(final_array+off, incoming_size, MPI_LONG, i, 0, MPI_COMM_WORLD, NULL);
+            off += incoming_size;
+        }
+    } else {
+        MPI_Send(&recv_buff_sz, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(recv_buff, recv_buff_sz, MPI_LONG, 0, 0, MPI_COMM_WORLD);
+    }
 		
-	if(my_rank == 0){
-		//TODO: Need k-wise merge?
-		int i;
-		for(i=0; i< n; i++){
-
-			printf("final_array: %ld\n", final_array[i]);
-		}
-	}
-		
-	//TODO: Time parallel sort using MPI_Wtime (ch 3.6.1)
+    if(my_rank == 0) {
+        gettimeofday(&tv2, NULL);
+        double parallel_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+            (double) (tv2.tv_sec - tv1.tv_sec); 
+        analyzeSort(final_array, n, parallel_time, "Parallel");
+    }
 
     free(sim_buckets);
     if(my_rank == 0) {
@@ -171,11 +160,6 @@ int sendRecvBuckets(int my_rank,
 	for(i = 0; i < comm_sz; i++){
         // Send size of the bucket to send_partner,
         // recv size of incoming buffer from recv_partner
-        if(my_rank == 0) {
-            printf("Round #%d\n", i+1);
-            printf("Sending to %d\nRecving from %d\n", send_partner, recv_partner);
-            printf("Num sending %d\n", sim_buckets[send_partner].count);
-        }
 		MPI_Sendrecv(
             &sim_buckets[send_partner].count, // Send size of outgoing array
             1,                              // We are sending one value
@@ -191,10 +175,6 @@ int sendRecvBuckets(int my_rank,
             MPI_STATUS_IGNORE               // Status
         );
 
-        if(my_rank == 0) {
-            printf("Incoming buffer is of size %d\n", recv_size);
-            printf("Outgoing buffer is of size %d\n", sim_buckets[send_partner].count);
-        }
 		MPI_Sendrecv(
             sim_buckets[send_partner].a,     // Send the array
             sim_buckets[send_partner].count,// We want to send the whole array
@@ -228,7 +208,6 @@ void updateSendPartner(int *send_partner, int comm_sz) {
     *send_partner = (*send_partner + 1) % comm_sz;
 }
     
-	
 /*
  Create array of "buckets"
  The we only make pivot values for the first P-1 processes. The last
@@ -297,22 +276,7 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 		int w = (num_samples * (i+1)) / comm_sz;
 		pivots[i] = sample_indices[w];
 	}
-	// pivots now contains the list of pivots
 }
-
-/*/TODO: Finish...my brain is dead now
-void k_way_merge(Bucket *sim_buckets, int comm_sz, int local_n){
-	
-	int k_merge[n];
-	int i, j;
-	for(i = 0; i< comm_sz; i++){
-		if(sim_buckets[i].a[0] > sim_buckets[i+1].a[local_n-1]){
-				//TODO: Add toarray : k_merge[i*local_n] = sim_buckets[i+1].a;
-		}else{
-			//TODO: Add to array k_merge[i*local_n] = sim_buckets[i].a
-		}
-
-}*/
 
 void printAllBuckets(Bucket *sim_buckets, int my_rank, int len) {
    	if(my_rank == 0) {
@@ -449,6 +413,7 @@ int valid_sort(const long *array, const int len) {
 	int i;
 	for(i = 1; i< len; i++){
 		if(array[i-1] > array[i]){
+            printf("%ld > %ld\n", array[i-1], array[i]);
 			return false;
 		}
 	}
