@@ -1,6 +1,9 @@
-/* Melinda Grad
+/*
+ * Melinda Grad
  * Quentin Fulsher
  * PA3
+ * Parallel Bucket sort with using MPI
+ *
  */
 #include <sys/time.h>
 #include <errno.h>
@@ -28,7 +31,7 @@ void gen_random_array(long *array, const int len);
 void analyzeSort(long *array, int num_elements, double time, char *type);
 long get_random_index(const long *array, int len);
 long min(long first, long second);
-void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz,
+void p0_setup(long *array_serial, double *time_serial, long *array_parallel, int n, int comm_sz,
 int *pivots);
 Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array);
 int sendRecvBuckets(int my_rank, int comm_sz, Bucket *sim_buckets, long *recv_buff);
@@ -38,6 +41,8 @@ void printAllBuckets(Bucket *sim_buckets, int my_rank, int len);
 void printAllArray(long *array, int my_rank, int len);
 void printArray(long *array, int len);
 void printBuckets(Bucket *sim_buckets, int num_buckets);
+void printStats(int comm_sz, int n, double time_serial, double parallel_time);
+void compareArrays(int n, long *array_serial, long *final_array);
 
 int main(int argc, char *argv[]){
 	
@@ -49,6 +54,7 @@ int main(int argc, char *argv[]){
 	int n;
 	int local_n;
 	int *pivots;
+	double time_serial;
     struct timeval tv1, tv2;
 
 	// MPI initializations
@@ -57,7 +63,6 @@ int main(int argc, char *argv[]){
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
 	// Process 0 gets arg and creates arrays with random vals
-	//TODO: Error check
 	if(my_rank == 0){
 		printf("Enter number of elements to sort\n");
 		scanf("%d", &n);
@@ -74,7 +79,7 @@ int main(int argc, char *argv[]){
 		
 	if(my_rank == 0) {
 		array_serial = malloc(n*sizeof(long));
-		p0_setup(array_serial, array_parallel, n, comm_sz, pivots);
+		p0_setup(array_serial, &time_serial, array_parallel, n, comm_sz, pivots);
         gettimeofday(&tv1, NULL);
 	}
 
@@ -130,7 +135,11 @@ int main(int argc, char *argv[]){
         double parallel_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
             (double) (tv2.tv_sec - tv1.tv_sec); 
         analyzeSort(final_array, n, parallel_time, "Parallel");
-    }
+
+    	compareArrays(n, array_serial, final_array);
+		printStats(comm_sz, n, time_serial, parallel_time);
+	}
+
 
     free(sim_buckets);
     if(my_rank == 0) {
@@ -141,11 +150,50 @@ int main(int argc, char *argv[]){
 	MPI_Finalize();
 	return 0;
 }
+/* Function to compare the two sorted arrays
+ * @param n number of elements
+ * @param array_serial serial array
+ * @param final_array parallel sorted array
+ */
+void compareArrays(int n, long *array_serial, long *final_array){
 
+	int i;
+	int invalid_flag = 0;
+	for(i = 0; i< n; i++){
+		if(array_serial[i] != final_array[i]){
+			invalid_flag = 1;
+		}
+	}
+		if(invalid_flag){
+			printf("ARRAYS DO NOT MATCH");
+		}
+}
 
-/*TODO: Check and finish me
+/* Function to print details of the sort
+ * @param comm_sz number of processors
+ * @param n number of elements sorted
+ * @param time_serial
+ * @param time parallel
+ */
+void printStats(int comm_sz, int n, double time_serial, double parallel_time){
+
+	printf("=====================\n");
+	printf("Number of Processors: %d\n", comm_sz);
+	printf("Array Size: %d\n", n);
+	double speedup = time_serial/ parallel_time;
+	double efficiency = speedup/ comm_sz;
+	printf("Speedup: %f\n", speedup);
+	printf("Efficiency: %f\n", efficiency);
+	printf("=====================\n");
+}
+
+/* Function to send buckets
  * Communicate with all the other processes in an offset fashion.
- * We wrote it down on a sheet of paper. GET THE PAPER. 
+ * @param my_rank rank of process
+ * @param comm_sz number of processors
+ * @param sim_buckets array of buckets
+ * @param recv_buff receive buffer
+ * @return num_recv number of elements received
  */
 int sendRecvBuckets(int my_rank, 
         int comm_sz, Bucket *sim_buckets, long *recv_buff){
@@ -196,24 +244,34 @@ int sendRecvBuckets(int my_rank,
 	}
     return num_recvd;
 }
-
+/* helper function to determine receiving partner
+ * @param recv_partner
+ * @param comm_sz number of processors
+ */
 void updateRecvPartner(int *recv_partner, int comm_sz) {
     *recv_partner -= 1;
     if(*recv_partner <  0) {
         *recv_partner = (comm_sz - 1);
     }
 }
-
+/* helper function to determine sending partner
+ * @param send_partner
+ * @param comm_sz number of processors
+ */
 void updateSendPartner(int *send_partner, int comm_sz) {
     *send_partner = (*send_partner + 1) % comm_sz;
 }
     
 /*
- Create array of "buckets"
- The we only make pivot values for the first P-1 processes. The last
- process should get anything that is greater than the last pivot.
- To get everything, we make the last bucket's bound effectively infinite.
-*/
+ * Create array of "buckets"
+ * The we only make pivot values for the first P-1 processes. The last
+ * process should get anything that is greater than the last pivot.
+ * To get everything, we make the last bucket's bound effectively infinite.
+ * @param comm_sz numbr of processors
+ * @param pivots array of pivots
+ * @param local_n size of local array
+ * @param local_array local array
+ */
 Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 	 int i, j;
 
@@ -240,10 +298,18 @@ Bucket *createBuckets(int comm_sz, int *pivots, int local_n, long *local_array){
 
 		 }
 	 }
-     return sim_buckets; // TODO Free this
+     return sim_buckets;
 }
 
-void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
+/* Function to perform initial setup done by process 0
+ * @param array_serial serial array
+ * @param time_serial serial sort time
+ * @param array_parallel array to perform parallel sort
+ * @param n number of elements to sort
+ * @param comm_sz number of processors
+ * @param pivots array of pivots
+ */
+void p0_setup(long *array_serial, double *time_serial, long *array_parallel, int n, int comm_sz, int *pivots) {
 
 	struct timeval tv1, tv2; //For timing
 	// Fill arrays with random values
@@ -254,9 +320,9 @@ void p0_setup(long *array_serial, long *array_parallel, int n, int comm_sz, int 
 	gettimeofday(&tv1,NULL); //Start time
 	serialMergeSort(array_serial, n);
 	gettimeofday(&tv2,NULL); //End time
-	double serial_time = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
+	*time_serial = (double) (tv2.tv_usec - tv1.tv_usec)/1000000 +
 		(double) (tv2.tv_sec - tv1.tv_sec); 
-	analyzeSort(array_serial, n, serial_time, "Serial"); 
+	analyzeSort(array_serial, n, *time_serial, "Serial"); 
 
 	/*** COMPUTE PIVOTS ***/
 	// Calc S and create sample array and fill it with random samples
@@ -341,6 +407,8 @@ void printBuckets(Bucket *sim_buckets, int num_buckets) {
 
 
 /* Finds the minimum of two longs
+ * @param first long to compare
+ * @param second long to compare
  */
 long min(long first, long second){
 	if(first < second)
@@ -425,8 +493,7 @@ void analyzeSort(long *array, int num_elements, double time, char *type){
 		printf("INVALID SORT\n");
 	} else{
 		printf("======================\n");
-		printf("VALID SORT\n");
-		//TODO: Add time and complexity stats
+		//printf("VALID SORT\n");
 		printf("Type: %s\n", type);
 		printf("Time: %lf\n", time);
 	}
